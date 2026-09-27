@@ -1,0 +1,283 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ulimit -c 0
+
+project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+width=1280
+height=720
+outputs=1
+duration=0
+mock_outcome=failure
+fault=none
+without_bus=0
+scenario=none
+metrics=0
+
+while (($#)); do
+    case "$1" in
+        --width|--height|--outputs|--duration|--fault|--scenario)
+            if (($# < 2)); then
+                printf 'Missing value for %s\n' "$1" >&2
+                exit 2
+            fi
+            case "$1" in
+                --width) width="$2" ;;
+                --height) height="$2" ;;
+                --outputs) outputs="$2" ;;
+                --duration) duration="$2" ;;
+                --fault) fault="$2" ;;
+                --scenario) scenario="$2" ;;
+            esac
+            shift 2
+            ;;
+        --mock-success) mock_outcome=success; shift ;;
+        --metrics) metrics=1; shift ;;
+        --no-session-bus) without_bus=1; shift ;;
+        *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+    esac
+done
+
+for value in "$width" "$height" "$outputs" "$duration"; do
+    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+        printf 'Dimensions, output count and duration must be non-negative integers.\n' >&2
+        exit 2
+    fi
+done
+if ((width < 640 || width > 5120 || height < 480 || height > 2880 || outputs < 1 || outputs > 3 || duration > 300)); then
+    printf 'Requested dimensions, output count or duration are outside the safe harness range.\n' >&2
+    exit 2
+fi
+case "$fault" in
+    none|qml|shader|compositor|quickshell) ;;
+    *) printf 'Unknown fault fixture: %s\n' "$fault" >&2; exit 2 ;;
+esac
+case "$scenario" in
+    none|idle|auth|auth-hold|failure|success) ;;
+    *) printf 'Unknown state capture scenario: %s\n' "$scenario" >&2; exit 2 ;;
+esac
+if [[ "$scenario" == success ]]; then
+    mock_outcome=success
+fi
+if [[ "$scenario" != none && "$duration" == 0 ]]; then
+    duration=12
+fi
+
+for program in kwin_wayland quickshell setsid rg; do
+    if ! command -v "$program" >/dev/null 2>&1; then
+        printf 'Required program is missing: %s\n' "$program" >&2
+        exit 127
+    fi
+done
+if ((without_bus == 0)) && ! command -v dbus-daemon >/dev/null 2>&1; then
+    printf 'dbus-daemon is required for an isolated session bus.\n' >&2
+    exit 127
+fi
+if [[ -z "${XDG_RUNTIME_DIR:-}" || -z "${WAYLAND_DISPLAY:-}" ]]; then
+    printf 'Run this harness inside the current Wayland desktop.\n' >&2
+    exit 2
+fi
+if [[ "$WAYLAND_DISPLAY" == /* ]]; then
+    host_socket="$WAYLAND_DISPLAY"
+else
+    host_socket="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
+fi
+if [[ ! -S "$host_socket" ]]; then
+    printf 'Host Wayland socket is unavailable.\n' >&2
+    exit 2
+fi
+
+"$project_root/scripts/stage-isolated-greeter.sh" >/dev/null
+
+umask 077
+runtime_root="$(mktemp -d "${TMPDIR:-/tmp}/nocturne-isolated.XXXXXX")"
+log_parent="$project_root/logs/isolated-greeter"
+mkdir -p "$log_parent"
+log_dir="$(mktemp -d "$log_parent/run.XXXXXX")"
+kwin_pid=''
+quickshell_pid=''
+bus_pid=''
+
+stop_group() {
+    local group_pid="$1"
+    if [[ -n "$group_pid" ]] && kill -0 "$group_pid" 2>/dev/null; then
+        kill -TERM -- "-$group_pid" 2>/dev/null || true
+        wait "$group_pid" 2>/dev/null || true
+    fi
+}
+check_runtime_warnings() {
+    if rg -q 'Failed to find shader|shader preparation failed|Failed to load configuration|Harness state mismatch|Harness capture failed' "$log_dir/quickshell.log"; then
+        printf 'QML or shader startup failure detected in %s/quickshell.log\n' "$log_dir" >&2
+        return 1
+    fi
+}
+cleanup() {
+    trap - EXIT
+    stop_group "$quickshell_pid"
+    stop_group "$kwin_pid"
+    stop_group "$bus_pid"
+    if [[ "$runtime_root" == "${TMPDIR:-/tmp}"/nocturne-isolated.* && -d "$runtime_root" ]]; then
+        rm -r -- "$runtime_root"
+    fi
+    printf 'Logs retained at %s\n' "$log_dir"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+mkdir -m 700 "$runtime_root/runtime" "$runtime_root/home" "$runtime_root/config" "$runtime_root/cache" "$runtime_root/data" "$runtime_root/state" "$runtime_root/stage"
+
+if ((without_bus == 0)); then
+    private_bus_socket="$runtime_root/runtime/bus"
+    setsid dbus-daemon --session --nofork --nopidfile \
+        --address="unix:path=$private_bus_socket" \
+        >"$log_dir/dbus.log" 2>&1 &
+    bus_pid=$!
+    for ((attempt = 0; attempt < 50; attempt++)); do
+        if [[ -S "$private_bus_socket" ]]; then
+            break
+        fi
+        if ! kill -0 "$bus_pid" 2>/dev/null; then
+            break
+        fi
+        sleep 0.1
+    done
+    if [[ ! -S "$private_bus_socket" ]]; then
+        printf 'Private session bus did not create its socket; inspect %s/dbus.log\n' "$log_dir" >&2
+        exit 1
+    fi
+fi
+
+cp -a -- "$project_root/production-root/usr/share/nocturne-greeter/." "$runtime_root/stage/"
+(
+    cd "$runtime_root/stage"
+    sha256sum -c SHA256SUMS >/dev/null
+)
+mkdir -m 700 "$runtime_root/stage/mock"
+cp -- "$project_root/harness/shell.qml" "$runtime_root/stage/shell.qml"
+cp -- "$project_root/harness/mock/MockAuthenticator.qml" "$project_root/harness/mock/MockIdentity.qml" "$project_root/harness/mock/HarnessScenario.qml" "$project_root/harness/mock/HarnessMetrics.qml" "$runtime_root/stage/mock/"
+
+if [[ "$fault" == qml ]]; then
+    printf 'This is intentionally invalid QML\n' > "$runtime_root/stage/shell.qml"
+elif [[ "$fault" == shader ]]; then
+    rm -- "$runtime_root/stage/shaders/pulse.frag.qsb"
+fi
+
+locale_name="${LANG:-C.UTF-8}"
+base_env=(
+    "HOME=$runtime_root/home"
+    USER=nocturne-harness
+    LOGNAME=nocturne-harness
+    PATH=/usr/bin:/bin
+    "LANG=$locale_name"
+    "XDG_RUNTIME_DIR=$runtime_root/runtime"
+    "XDG_CONFIG_HOME=$runtime_root/config"
+    "XDG_CACHE_HOME=$runtime_root/cache"
+    "XDG_DATA_HOME=$runtime_root/data"
+    "XDG_STATE_HOME=$runtime_root/state"
+    XDG_DATA_DIRS=/usr/local/share:/usr/share
+    XDG_CONFIG_DIRS=/etc/xdg
+    XDG_SESSION_TYPE=wayland
+    QT_QPA_PLATFORM=wayland
+    QSG_RENDER_LOOP=threaded
+    QSG_INFO=1
+    QS_DISABLE_FILE_WATCHER=1
+    QS_DISABLE_CRASH_HANDLER=1
+)
+if ((without_bus == 0)); then
+    base_env+=("DBUS_SESSION_BUS_ADDRESS=unix:path=$private_bus_socket")
+fi
+
+nested_socket_name=wayland-umbra
+nested_socket="$runtime_root/runtime/$nested_socket_name"
+printf 'Host socket: %s\nNested socket: %s\n' "$host_socket" "$nested_socket"
+printf 'Isolated runtime: %s\nLogs: %s\n' "$runtime_root" "$log_dir"
+printf 'Mock result: %s; fault fixture: %s; state capture: %s; session bus passed: %s\n' "$mock_outcome" "$fault" "$scenario" "$((1 - without_bus))"
+printf 'This harness never calls PAM, greetd, PLM, or a real session launcher.\n'
+
+start_ms="$(date +%s%3N)"
+setsid env -i "${base_env[@]}" kwin_wayland \
+    --wayland-display "$host_socket" \
+    --socket "$nested_socket_name" \
+    --width "$width" --height "$height" --output-count "$outputs" \
+    --no-lockscreen --no-global-shortcuts --no-kactivities \
+    >"$log_dir/compositor.log" 2>&1 &
+kwin_pid=$!
+
+for ((attempt = 0; attempt < 100; attempt++)); do
+    if [[ -S "$nested_socket" ]]; then
+        break
+    fi
+    if ! kill -0 "$kwin_pid" 2>/dev/null; then
+        break
+    fi
+    sleep 0.1
+done
+if [[ ! -S "$nested_socket" ]]; then
+    printf 'Nested compositor did not create its socket; inspect %s/compositor.log\n' "$log_dir" >&2
+    exit 1
+fi
+socket_ms="$(date +%s%3N)"
+printf 'Nested Wayland socket ready after %s ms.\n' "$((socket_ms - start_ms))"
+
+quickshell_command=quickshell
+if [[ "$fault" == quickshell ]]; then
+    quickshell_command="$runtime_root/no-such-quickshell"
+fi
+setsid env -i "${base_env[@]}" "WAYLAND_DISPLAY=$nested_socket_name" \
+    "NOCTURNE_MOCK_OUTCOME=$mock_outcome" \
+    "NOCTURNE_HARNESS_SCENARIO=$scenario" \
+    "NOCTURNE_HARNESS_METRICS=$metrics" \
+    "NOCTURNE_HARNESS_CAPTURE_DIR=$log_dir" "$quickshell_command" \
+    --no-color --path "$runtime_root/stage" \
+    >"$log_dir/quickshell.log" 2>&1 &
+quickshell_pid=$!
+
+sleep 1
+if ! kill -0 "$quickshell_pid" 2>/dev/null; then
+    printf 'Quickshell exited during startup; inspect %s/quickshell.log\n' "$log_dir" >&2
+    exit 1
+fi
+if ! kill -0 "$kwin_pid" 2>/dev/null; then
+    printf 'Nested compositor exited during startup; inspect %s/compositor.log\n' "$log_dir" >&2
+    exit 1
+fi
+ready_ms="$(date +%s%3N)"
+printf 'Both processes still running after %s ms. Focus the nested KWin window to interact.\n' "$((ready_ms - start_ms))"
+printf 'Close with Ctrl+C in this terminal.\n'
+
+deadline=$((SECONDS + duration))
+compositor_fault_at=$((SECONDS + 2))
+compositor_fault_sent=0
+while kill -0 "$quickshell_pid" 2>/dev/null; do
+    if [[ "$fault" == compositor && "$compositor_fault_sent" == 0 ]] && ((SECONDS >= compositor_fault_at)); then
+        compositor_fault_sent=1
+        printf 'Injecting a controlled stop of the nested KWin process.\n'
+        kill -TERM -- "-$kwin_pid" 2>/dev/null || true
+    fi
+    if ! kill -0 "$kwin_pid" 2>/dev/null; then
+        printf 'Nested compositor exited while Quickshell was running.\n' >&2
+        exit 1
+    fi
+    if ((duration > 0 && SECONDS >= deadline)); then
+        if [[ "$scenario" != none && "$scenario" != auth-hold ]]; then
+            printf 'Timed out waiting for the harness state capture.\n' >&2
+            exit 1
+        fi
+        check_runtime_warnings
+        exit 0
+    fi
+    sleep 0.25
+done
+
+if ! kill -0 "$kwin_pid" 2>/dev/null; then
+    printf 'Nested compositor exited; inspect %s/compositor.log and %s/quickshell.log\n' "$log_dir" "$log_dir" >&2
+    exit 1
+fi
+if wait "$quickshell_pid"; then
+    printf 'Quickshell exited normally.\n'
+    check_runtime_warnings
+else
+    printf 'Quickshell exited with an error; inspect %s/quickshell.log\n' "$log_dir" >&2
+    exit 1
+fi

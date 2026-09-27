@@ -1,0 +1,23 @@
+# Runtime / harness logs
+logs/
+
+# Local snapshots created before Git history existed
+backups/
+
+# Local-only restore helpers require the snapshots above
+scripts/restore-*.sh
+
+# Impeccable local cache
+.impeccable/*.cache.json
+
+# Temporary/runtime files
+*.log
+*.tmp
+*.pid
+
+# Editor / OS noise
+.DS_Store
+*~
+
+# Pre-Git prototype kept locally
+shell-v01.qml

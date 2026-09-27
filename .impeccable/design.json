@@ -1,0 +1,306 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-24T22:32:59.001224+00:00",
+  "title": "Design System: Nocturne — Umbra",
+  "extensions": {
+    "colorMeta": {
+      "black": {
+        "role": "neutral",
+        "displayName": "Black",
+        "tonalRamp": [
+          "oklch(15.00% 0.0000 0.00)",
+          "oklch(26.43% 0.0000 0.00)",
+          "oklch(37.86% 0.0000 0.00)",
+          "oklch(49.29% 0.0000 0.00)",
+          "oklch(60.71% 0.0000 0.00)",
+          "oklch(72.14% 0.0000 0.00)",
+          "oklch(83.57% 0.0000 0.00)",
+          "oklch(95.00% 0.0000 0.00)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "tonalRamp": [
+          "oklch(15.00% 0.0013 286.38)",
+          "oklch(26.43% 0.0013 286.38)",
+          "oklch(37.86% 0.0013 286.38)",
+          "oklch(49.29% 0.0013 286.38)",
+          "oklch(60.71% 0.0013 286.38)",
+          "oklch(72.14% 0.0013 286.38)",
+          "oklch(83.57% 0.0013 286.38)",
+          "oklch(95.00% 0.0013 286.38)"
+        ]
+      },
+      "secondary": {
+        "role": "neutral",
+        "displayName": "Secondary",
+        "tonalRamp": [
+          "oklch(15.00% 0.0143 286.04)",
+          "oklch(26.43% 0.0143 286.04)",
+          "oklch(37.86% 0.0143 286.04)",
+          "oklch(49.29% 0.0143 286.04)",
+          "oklch(60.71% 0.0143 286.04)",
+          "oklch(72.14% 0.0143 286.04)",
+          "oklch(83.57% 0.0143 286.04)",
+          "oklch(95.00% 0.0143 286.04)"
+        ]
+      },
+      "quiet": {
+        "role": "neutral",
+        "displayName": "Quiet",
+        "tonalRamp": [
+          "oklch(15.00% 0.0152 285.91)",
+          "oklch(26.43% 0.0152 285.91)",
+          "oklch(37.86% 0.0152 285.91)",
+          "oklch(49.29% 0.0152 285.91)",
+          "oklch(60.71% 0.0152 285.91)",
+          "oklch(72.14% 0.0152 285.91)",
+          "oklch(83.57% 0.0152 285.91)",
+          "oklch(95.00% 0.0152 285.91)"
+        ]
+      },
+      "placeholder": {
+        "role": "neutral",
+        "displayName": "Placeholder",
+        "tonalRamp": [
+          "oklch(15.00% 0.0176 285.91)",
+          "oklch(26.43% 0.0176 285.91)",
+          "oklch(37.86% 0.0176 285.91)",
+          "oklch(49.29% 0.0176 285.91)",
+          "oklch(60.71% 0.0176 285.91)",
+          "oklch(72.14% 0.0176 285.91)",
+          "oklch(83.57% 0.0176 285.91)",
+          "oklch(95.00% 0.0176 285.91)"
+        ]
+      },
+      "lilac": {
+        "role": "primary",
+        "displayName": "Lilac",
+        "tonalRamp": [
+          "oklch(15.00% 0.1592 293.54)",
+          "oklch(26.43% 0.1592 293.54)",
+          "oklch(37.86% 0.1592 293.54)",
+          "oklch(49.29% 0.1592 293.54)",
+          "oklch(60.71% 0.1592 293.54)",
+          "oklch(72.14% 0.1592 293.54)",
+          "oklch(83.57% 0.1592 293.54)",
+          "oklch(95.00% 0.1592 293.54)"
+        ]
+      },
+      "purple": {
+        "role": "primary",
+        "displayName": "Purple",
+        "tonalRamp": [
+          "oklch(15.00% 0.2189 292.72)",
+          "oklch(26.43% 0.2189 292.72)",
+          "oklch(37.86% 0.2189 292.72)",
+          "oklch(49.29% 0.2189 292.72)",
+          "oklch(60.71% 0.2189 292.72)",
+          "oklch(72.14% 0.2189 292.72)",
+          "oklch(83.57% 0.2189 292.72)",
+          "oklch(95.00% 0.2189 292.72)"
+        ]
+      },
+      "graphite": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "tonalRamp": [
+          "oklch(15.00% 0.0102 285.33)",
+          "oklch(26.43% 0.0102 285.33)",
+          "oklch(37.86% 0.0102 285.33)",
+          "oklch(49.29% 0.0102 285.33)",
+          "oklch(60.71% 0.0102 285.33)",
+          "oklch(72.14% 0.0102 285.33)",
+          "oklch(83.57% 0.0102 285.33)",
+          "oklch(95.00% 0.0102 285.33)"
+        ]
+      },
+      "outline": {
+        "role": "neutral",
+        "displayName": "Outline",
+        "tonalRamp": [
+          "oklch(15.00% 0.0158 285.50)",
+          "oklch(26.43% 0.0158 285.50)",
+          "oklch(37.86% 0.0158 285.50)",
+          "oklch(49.29% 0.0158 285.50)",
+          "oklch(60.71% 0.0158 285.50)",
+          "oklch(72.14% 0.0158 285.50)",
+          "oklch(83.57% 0.0158 285.50)",
+          "oklch(95.00% 0.0158 285.50)"
+        ]
+      },
+      "surface-edge": {
+        "role": "neutral",
+        "displayName": "Surface Edge",
+        "tonalRamp": [
+          "oklch(15.00% 0.0127 285.56)",
+          "oklch(26.43% 0.0127 285.56)",
+          "oklch(37.86% 0.0127 285.56)",
+          "oklch(49.29% 0.0127 285.56)",
+          "oklch(60.71% 0.0127 285.56)",
+          "oklch(72.14% 0.0127 285.56)",
+          "oklch(83.57% 0.0127 285.56)",
+          "oklch(95.00% 0.0127 285.56)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Clock",
+        "purpose": "Relógio; Noto Sans Light instalado."
+      },
+      "identity": {
+        "displayName": "Identity",
+        "purpose": "Nome de usuário, com elisão."
+      },
+      "wordmark": {
+        "displayName": "NOCTURNE",
+        "purpose": "Único título uppercase com tracking largo."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "feedback",
+        "value": "160ms; Easing.OutCubic on press scale",
+        "purpose": "Hover/foco e clique de ícone."
+      },
+      {
+        "name": "surface",
+        "value": "240ms Easing.OutCubic",
+        "purpose": "Popover, chevron e comprimento da linha de foco."
+      },
+      {
+        "name": "wake-reveal",
+        "value": "160ms delay + 840ms Easing.OutCubic",
+        "purpose": "authReveal; clock off at .32, identity starts .36, field .50, hint .68."
+      },
+      {
+        "name": "typing",
+        "value": "280ms Easing.OutCubic",
+        "purpose": "Perturbação mínima e ponto mais recente."
+      },
+      {
+        "name": "authentication",
+        "value": "440ms Easing.InOutCubic",
+        "purpose": "Alinha matéria e desacelera o tempo orbital."
+      },
+      {
+        "name": "failure",
+        "value": "140ms Easing.OutCubic + 260ms Easing.InOutSine; sem hold",
+        "purpose": "Perturbação orbital localizada e liberação contínua de tensão para AUTH."
+      },
+      {
+        "name": "success",
+        "value": "1480ms Easing.InOutCubic",
+        "purpose": "Convergência para preto."
+      },
+      {
+        "name": "return",
+        "value": "460ms Easing.InOutCubic",
+        "purpose": "Retorno de authReveal e successProgress."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow-composition",
+        "value": "aspect ratio < 1.45"
+      },
+      {
+        "name": "ultrawide-center",
+        "value": "aspect ratio > 2.1"
+      },
+      {
+        "name": "ui-scale",
+        "value": "clamp(height / 900, 1, 1.35)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Icon button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "Illustrative HTML translation of IconButton.qml at base scale; production remains QML.",
+      "html": "<button class=\"ds-icon\" aria-label=\"Unlock\"><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#A6A6B0\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 12h15m-6-6 6 6-6 6\"/></svg></button>",
+      "css": ".ds-icon{width:40px;height:40px;border:1px solid transparent;border-radius:50%;background:transparent;cursor:pointer;transition:background 160ms}.ds-icon svg{width:19px;height:19px;opacity:.8;transition:transform 160ms cubic-bezier(.215,.61,.355,1)}.ds-icon:hover,.ds-icon:focus-visible{background:#111116}.ds-icon:focus-visible{outline:none;border-color:#A78BFA}.ds-icon:hover svg,.ds-icon:focus-visible svg{opacity:1}.ds-icon:active svg{transform:scale(.92)}"
+    },
+    {
+      "name": "Password affordance",
+      "kind": "input",
+      "refersTo": "password",
+      "description": "Illustrative native password field with short focus line. Production QML uses a separate clipped dot row and native TextInput.",
+      "html": "<div class=\"ds-password\"><input aria-label=\"Password\" type=\"password\" placeholder=\"Enter your password\"><span></span></div>",
+      "css": ".ds-password{position:relative;width:240px;height:60px}.ds-password input{width:100%;height:100%;padding:0;border:0;background:transparent;color:#F2F2F3;font:15px \"Adwaita Sans\",sans-serif;outline:none}.ds-password input::placeholder{color:#92929E}.ds-password span{position:absolute;bottom:0;left:0;width:18px;height:1px;background:#34343D;transition:width 240ms cubic-bezier(.215,.61,.355,1),background 160ms}.ds-password:focus-within span{width:42px;background:#A78BFA}"
+    },
+    {
+      "name": "Session control",
+      "kind": "nav",
+      "description": "Illustrative HTML translation of the session trigger; text is an example, not a live session model.",
+      "html": "<button class=\"ds-session\">Hyprland<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#A6A6B0\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m8 10 4 4 4-4\"/></svg></button>",
+      "css": ".ds-session{height:40px;display:flex;align-items:center;gap:10px;padding:0;border:0;background:transparent;color:#A6A6B0;font:12px \"Adwaita Sans\",sans-serif;cursor:pointer}.ds-session svg{width:14px;height:14px}.ds-session:hover,.ds-session:focus-visible{color:#F2F2F3;outline:none}"
+    },
+    {
+      "name": "Session popover",
+      "kind": "card",
+      "refersTo": "popover",
+      "description": "Illustrative HTML translation of the current-session preview surface.",
+      "html": "<div class=\"ds-popover\"><div>Hyprland</div><p>Current session · preview</p></div>",
+      "css": ".ds-popover{width:202px;min-height:58px;padding:18px;border:1px solid #292930;border-radius:10px;background:#111116;color:#F2F2F3;font:14px \"Adwaita Sans\",sans-serif}.ds-popover p{margin:12px 0 0;color:#777781;font-size:11px}"
+    },
+    {
+      "name": "Clock",
+      "kind": "custom",
+      "description": "Static illustration of ClockDisplay.qml, showing base-scale hierarchy; runtime uses the real local time.",
+      "html": "<div class=\"ds-clock\"><div>23:48</div><p>Thursday, 24 September</p></div>",
+      "css": ".ds-clock{color:#F2F2F3;font:300 88px \"Noto Sans\",sans-serif;letter-spacing:-3px}.ds-clock p{margin:9px 0 0;color:#A6A6B0;font:14px \"Adwaita Sans\",sans-serif;letter-spacing:normal}"
+    },
+    {
+      "name": "Nocturne signature",
+      "kind": "custom",
+      "description": "Actual original SVG mark, illustrated with the QML wordmark at base scale.",
+      "html": "<div class=\"ds-signature\"><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 40 40\"><path fill=\"#F2F2F3\" d=\"M31.2 5.2C22.8-.6 11.1 2.6 5.4 11.1 1.1 17.5 1.7 26 6.9 31.9 5.4 23.1 9.5 13.1 18.1 8.1c4.3-2.5 8.6-3.2 13.1-2.9Z\"/><path fill=\"#A78BFA\" d=\"M8.8 34.8c8.4 5.8 20.1 2.6 25.8-5.9 4.3-6.4 3.7-14.9-1.5-20.8 1.5 8.8-2.6 18.8-11.2 23.8-4.3 2.5-8.6 3.2-13.1 2.9Z\"/></svg><span>NOCTURNE</span></div>",
+      "css": ".ds-signature{display:flex;align-items:center;gap:14px;color:#F2F2F3}.ds-signature svg{width:30px;height:30px}.ds-signature span{font:500 13px \"Adwaita Sans\",sans-serif;letter-spacing:3.5px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Um observatório silencioso",
+    "overview": "O Nocturne usa preto como espaço, um corpo celeste quase apagado como presença e matéria orbital prateada/violeta como luz. A interface tem densidade baixa, tipografia legível e movimento amortecido. O gesto recorrente é a abertura: a marca deixa o preto atravessar duas crescentes; o campo de senha deixa os pontos flutuarem sem uma caixa.\n\nA direção substitui o visual anterior com autorização explícita do usuário. O contrato continua: tempo e identidade compartilham uma coluna; tensão gravitacional precede a identidade; a senha surge em seguida; no sucesso, matéria converge e a luz fecha. O shader procedural e as capturas reais de QML são a autoridade visual. Não há imagem conceitual usada como substituto da implementação.",
+    "keyCharacteristics": [
+      "Preto AMOLED com luz orbital localizada.",
+      "Hierarquia editorial e interface em sentence case.",
+      "Marca e ícones vetoriais originais, com geometria consistente.",
+      "Movimento amortecido com foco imediato e revelação escalonada."
+    ],
+    "rules": [
+      {
+        "name": "The Reserved Light Rule",
+        "body": "O acento acompanha foco, matéria e feedback; fundos grandes permanecem pretos ou grafite.",
+        "section": "colors"
+      },
+      {
+        "name": "The Shared Column Rule",
+        "body": "O relógio desaparece antes de a identidade ocupar sua coluna; a troca não sobrepõe as duas hierarquias.",
+        "section": "typography"
+      },
+      {
+        "name": "The Quiet Surface Rule",
+        "body": "Profundidade vem do fenômeno e da oclusão. Controles usam camadas tonais e contornos finos, sem sombras ou blur decorativos.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do manter a coluna editorial alinhada à marca e à identidade da máquina.",
+      "Do usar o foco lilás e o alvo circular dos controles existentes.",
+      "Do revelar identidade, senha e hint na sequência do controlador, preservando o foco imediato.",
+      "Do verificar as mudanças em capturas reais do QML em cada proporção suportada."
+    ],
+    "donts": [
+      "Don't introduzir cyan, azul brilhante, amarelo ou RGB na identidade.",
+      "Don't transformar roxo em preenchimento de tela, brilho por tecla ou flash de falha.",
+      "Don't promover texto de debug ou monospace a linguagem da interface normal.",
+      "Don't copiar o símbolo ou os assets de terceiros; manter a família vetorial própria."
+    ]
+  }
+}

@@ -5,39 +5,81 @@ Item {
     visible: false
 
     property bool active: false
-    property bool awaitingResult: false
-    property string outcome: "failure"
+    property bool responseRequired: false
+    property string scenario: "password-failure"
     property int responseDelay: 360
+    property int generation: 0
+    property int promptCount: 0
+    property int lateGeneration: 0
 
-    signal prompt(string message, bool responseRequired, bool echoResponse, bool error)
-    signal message(string message, bool error)
-    signal failure(string message)
-    signal readyToLaunch
+    signal prompt(string message, bool responseRequired, bool echoResponse, int attemptGeneration)
+    signal message(string message, bool error, int attemptGeneration)
+    signal failure(string message, int attemptGeneration)
+    signal readyToLaunch(int attemptGeneration)
+    signal backendError(string message, int attemptGeneration)
 
-    function begin(username, sessionId) {
-        void username;
-        void sessionId;
-        if (active)
-            return;
+    function begin(user, session, attemptGeneration) {
+        void user;
+        void session;
         active = true;
-        awaitingResult = false;
-        prompt("Enter your password", true, false, false);
+        responseRequired = false;
+        generation = attemptGeneration;
+        promptCount = 0;
+
+        if (scenario === "informational-message")
+            message("Touch your security key", false, generation);
+        else if (scenario === "error-message")
+            message("Security key not detected", true, generation);
+
+        promptCount = 1;
+        if (scenario === "visible-prompt")
+            prompt("Enter one-time code", true, true, generation);
+        else
+            prompt("Enter your password", true, false, generation);
+        responseRequired = true;
+        return true;
     }
 
-    function respond(secret) {
-        // Never retain, print, or compare the secret in the harness.
-        void secret;
-        if (!active || awaitingResult)
-            return;
-        awaitingResult = true;
+    function respond(response, attemptGeneration) {
+        if (!active || !responseRequired || attemptGeneration !== generation)
+            return false;
+
+        // Keep only protocol state. Never retain, compare, or print the value.
+        void response;
+        responseRequired = false;
+        resultGeneration = attemptGeneration;
         resultTimer.restart();
+        response = "";
+        return true;
     }
 
-    function cancel() {
-        resultTimer.stop();
-        awaitingResult = false;
+    function cancel(attemptGeneration) {
+        if (attemptGeneration !== generation)
+            return;
+
         active = false;
+        responseRequired = false;
+        resultTimer.stop();
+        if (scenario === "late-response-after-cancel") {
+            lateGeneration = attemptGeneration;
+            lateTimer.restart();
+        }
     }
+
+    function requestSessionLaunch() {
+        return false;
+    }
+
+    function disconnectBackend() {
+        if (!active)
+            return;
+        active = false;
+        responseRequired = false;
+        resultTimer.stop();
+        backendError("MOCK BACKEND DISCONNECTED", generation);
+    }
+
+    property int resultGeneration: 0
 
     Timer {
         id: resultTimer
@@ -45,12 +87,31 @@ Item {
         repeat: false
 
         onTriggered: {
-            root.active = false;
-            root.awaitingResult = false;
-            if (root.outcome === "success")
-                root.readyToLaunch();
-            else
-                root.failure("UNLOCK UNAVAILABLE · ISOLATED MOCK");
+            if (!root.active || root.resultGeneration !== root.generation)
+                return;
+
+            if ((root.scenario === "multi-prompt" || root.scenario === "multi-prompt-failure") && root.promptCount === 1) {
+                root.promptCount = 2;
+                root.responseRequired = true;
+                root.prompt("Enter OTP", true, true, root.generation);
+                return;
+            }
+
+            root.responseRequired = false;
+            if (root.scenario === "password-failure" || root.scenario === "multi-prompt-failure") {
+                root.active = false;
+                root.failure("AUTHENTICATION FAILED · MOCK", root.generation);
+            } else {
+                root.readyToLaunch(root.generation);
+            }
         }
+    }
+
+    Timer {
+        id: lateTimer
+        interval: 700
+        repeat: false
+
+        onTriggered: root.failure("LATE MOCK CALLBACK", root.lateGeneration)
     }
 }

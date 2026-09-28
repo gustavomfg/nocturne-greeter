@@ -14,6 +14,8 @@ FloatingWindow {
     property string loginUser: username
     property string hostname: "Local system"
     property string promptText: "Enter your password"
+    property bool responseRequired: false
+    property bool echoResponse: false
     property var statusModel: null
     property bool previewShortcutsEnabled: false
     property string sessionContextText: "Selected session"
@@ -173,6 +175,8 @@ FloatingWindow {
                 username: window.username
                 loginUser: window.loginUser
                 promptText: window.promptText
+                responseRequired: window.responseRequired
+                echoResponse: window.echoResponse
                 scaleFactor: window.uiScale
                 debugMode: window.debugMode
                 previewShortcutsEnabled: window.previewShortcutsEnabled

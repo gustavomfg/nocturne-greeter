@@ -1,6 +1,6 @@
-# Nocturne Greeter — Umbra preview + isolated harness 0.6
+# Nocturne Greeter — Umbra preview + isolated harness 0.7
 
-Preview em Quickshell/QML + GLSL: um corpo obsidiano com matéria orbital, identidade de eclipse e autenticação em uma coluna editorial. Executa dentro da sessão atual. Não altera display manager, PAM, boot ou serviços de login.
+Preview em Quickshell/QML + GLSL: um corpo obsidiano com matéria orbital, identidade de eclipse e autenticação em uma coluna editorial. Executa dentro da sessão atual. A fase 0.7 exercita a API Greetd do Quickshell contra um fixture IPC local, sem autenticação PAM real. Não altera display manager, PAM, boot ou serviços de login.
 
 ![Nocturne em idle](docs/screenshots/final/1920x1080-idle.png)
 
@@ -51,29 +51,31 @@ NOCTURNE_DEBUG=1 ~/.config/nocturne-greeter/scripts/run-preview.sh
 | `components/ClockDisplay.qml` | Relógio editorial e data |
 | `components/SystemChrome.qml`, `IconButton.qml` | Indicadores e menus com dados fornecidos pelo entrypoint |
 | `components/LiveSystemStatus.qml` | Rede, áudio, bateria e sessão somente no preview da sessão atual |
-| `components/AuthenticatorBridge.qml` | Fronteira entre state machine e backend do harness |
+| `components/AuthenticatorBridge.qml` | Fronteira entre state machine e backend |
+| `components/GreetdAuthenticator.qml` | Adapter para `Quickshell.Services.Greetd`; `readyToLaunch` sem chamar `launch()` |
 | `components/PreviewCapture.qml` | Captura opt-in, ausente do fluxo normal |
 | `shaders/pulse.frag`, `.qsb` | Esfera e planos orbitais analíticos; pacote Qt |
 | `assets/` | Marca e ícones SVG próprios |
 
 Fontes instaladas: **Noto Sans Light** no relógio; **Adwaita Sans** na interface; **Adwaita Mono** apenas no debug. Nenhuma fonte ou dependência foi baixada. O preview usa Quickshell e serviços de rede, PipeWire e UPower; o harness usa dados mock e funciona sem barramento de sessão. Build/testes usam as ferramentas Qt 6 já instaladas.
 
-## Harness Wayland isolado 0.6
+## Harness Wayland isolado 0.7
 
 ```sh
 ~/.config/nocturne-greeter/scripts/run-isolated-greeter.sh
 ```
 
-Abre KWin Wayland **aninhado** em uma janela da sessão atual, cria socket/runtime/D-Bus próprios e carrega uma cópia temporária do Umbra com backend falso. `Enter` produz falha mock; `--mock-success` avalia o SUCCESS visual sem autenticar nem lançar sessão. Encerre com `Ctrl+C` no terminal. Os logs ficam em `logs/isolated-greeter/`.
+Abre KWin Wayland **aninhado** em uma janela da sessão atual, cria socket/runtime/D-Bus próprios e carrega uma cópia temporária do Umbra com backend mock por padrão. `Enter` produz falha mock; `--mock-success` avalia o SUCCESS visual sem autenticar nem lançar sessão. Encerre com `Ctrl+C` no terminal. Os logs ficam em `logs/isolated-greeter/`.
 
 Para testar sem D-Bus de sessão ou capturar um estado:
 
 ```sh
 ~/.config/nocturne-greeter/scripts/run-isolated-greeter.sh --no-session-bus --duration 10
 ~/.config/nocturne-greeter/scripts/run-isolated-greeter.sh --scenario success
+~/.config/nocturne-greeter/scripts/test-greetd-protocol.sh
 ```
 
-O harness **não** altera o Plasma Login Manager e ainda depende do Wayland/GPU da sessão host como compositor pai. Leia [o relatório completo 0.6](docs/ISOLATED_GREETER_HARNESS_0.6.md) e [a arquitetura de login 0.5](docs/REAL_LOGIN_ARCHITECTURE_0.5.md) antes de considerar qualquer passo pré-login real.
+O último comando executa o módulo Greetd instalado contra um socket fixture local dentro do KWin aninhado. O fixture não roda greetd, PAM ou comandos de sessão e rejeita `start_session`. O harness **não** altera o Plasma Login Manager e ainda depende do Wayland/GPU da sessão host como compositor pai. Leia [a integração Greetd 0.7](docs/GREETD_PROTOCOL_0.7.md), [o relatório completo 0.6](docs/ISOLATED_GREETER_HARNESS_0.6.md) e [a arquitetura de login 0.5](docs/REAL_LOGIN_ARCHITECTURE_0.5.md) antes de considerar qualquer passo pré-login real.
 
 ## Verificação e capturas
 
@@ -81,6 +83,7 @@ O harness **não** altera o Plasma Login Manager e ainda depende do Wayland/GPU 
 ~/.config/nocturne-greeter/scripts/build-shader.sh
 ~/.config/nocturne-greeter/scripts/test-greeter.sh
 ~/.config/nocturne-greeter/scripts/lint-qml.sh
+~/.config/nocturne-greeter/scripts/test-greetd-protocol.sh
 ```
 
 Os testes Qt Quick offscreen verificam estados, teclado, clique/foco e submissão. Não substituem avaliação visual.
@@ -109,6 +112,6 @@ Cada execução encerra depois da captura. Isso permite conferir a fase orbital 
 
 O primeiro histórico público descreve o estado atual Umbra 0.6 em commits temáticos, sem reconstruir versões históricas. Snapshots e scripts locais de restauração dependem de `backups/`, que não é distribuído. Para recuperar o estado publicado, use os commits Git disponíveis no clone.
 
-## Autenticação futura
+## Fronteira de autenticação 0.7
 
-O harness fornece apenas a fronteira `AuthenticatorBridge` e um mock. Ainda faltam adapter real, prompts PAM completos, modelos seguros de usuários/sessões, capacidades de energia e testes em VM/TTY. Nenhuma dessas operações está ligada ao sistema atual. Configuração de login real exige uma tarefa separada.
+`AuthenticatorBridge` normaliza mock e `GreetdAuthenticator`, incluindo prompt secreto/visível, mensagens, cancelamento e geração por tentativa. A API real do Quickshell foi exercitada apenas contra um fixture IPC local. `readyToLaunch` termina na animação SUCCESS e na tela preta; `Greetd.launch()` e sessão real permanecem bloqueados. Não há autenticação PAM real. Veja [o relatório 0.7](docs/GREETD_PROTOCOL_0.7.md) para API, limites e o que falta provar em VM.

@@ -14,6 +14,7 @@ if [[ -z "$runner" ]]; then
 fi
 
 cd "$project_root"
-QML_IMPORT_PATH="${QML_IMPORT_PATH:-/usr/lib/qt6/qml}" \
+env -u GREETD_SOCK \
+    QML_IMPORT_PATH="${QML_IMPORT_PATH:-/usr/lib/qt6/qml}" \
     QT_QPA_PLATFORM=offscreen \
     "$runner" -input tests -platform offscreen

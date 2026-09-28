@@ -14,8 +14,15 @@ ShellRoot {
 
     MockAuthenticator {
         id: mockBackend
-        outcome: Quickshell.env("NOCTURNE_MOCK_OUTCOME") === "success" ? "success" : "failure"
+        scenario: Quickshell.env("NOCTURNE_AUTH_SCENARIO") || "password-failure"
     }
+
+    GreetdAuthenticator {
+        id: greetdBackend
+    }
+
+    readonly property var selectedBackend: Quickshell.env("NOCTURNE_AUTH_BACKEND") === "greetd-fixture"
+                                          ? greetdBackend : mockBackend
 
     GreeterWindow {
         id: greeter
@@ -24,6 +31,8 @@ ShellRoot {
         hostname: fixture.hostname
         statusModel: fixture
         promptText: boundary.promptText
+        responseRequired: boundary.responseRequired
+        echoResponse: boundary.echoResponse
         previewShortcutsEnabled: false
         sessionContextText: "Selected session · mock"
         powerUnavailableText: "Unavailable in isolated harness"
@@ -33,7 +42,7 @@ ShellRoot {
     AuthenticatorBridge {
         id: boundary
         controller: greeter.controller
-        backend: mockBackend
+        backend: root.selectedBackend
         selectedUser: fixture.userId
         selectedSession: fixture.sessionId
     }
@@ -41,7 +50,10 @@ ShellRoot {
     HarnessScenario {
         controller: greeter.controller
         authPanel: greeter.authPanel
+        boundary: boundary
+        backend: root.selectedBackend
         targetItem: greeter.captureTarget
+        fastBackend: Quickshell.env("NOCTURNE_AUTH_BACKEND") === "greetd-fixture"
         selectedState: Quickshell.env("NOCTURNE_HARNESS_SCENARIO") || "none"
         captureDirectory: Quickshell.env("NOCTURNE_HARNESS_CAPTURE_DIR") || ""
     }

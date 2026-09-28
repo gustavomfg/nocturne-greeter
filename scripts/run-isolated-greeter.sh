@@ -8,15 +8,17 @@ width=1280
 height=720
 outputs=1
 duration=0
-mock_outcome=failure
 fault=none
 without_bus=0
 scenario=none
 metrics=0
+auth_backend=mock
+auth_scenario=password-failure
+auth_scenario_explicit=0
 
 while (($#)); do
     case "$1" in
-        --width|--height|--outputs|--duration|--fault|--scenario)
+        --width|--height|--outputs|--duration|--fault|--scenario|--auth-backend|--auth-scenario)
             if (($# < 2)); then
                 printf 'Missing value for %s\n' "$1" >&2
                 exit 2
@@ -28,10 +30,12 @@ while (($#)); do
                 --duration) duration="$2" ;;
                 --fault) fault="$2" ;;
                 --scenario) scenario="$2" ;;
+                --auth-backend) auth_backend="$2" ;;
+                --auth-scenario) auth_scenario="$2"; auth_scenario_explicit=1 ;;
             esac
             shift 2
             ;;
-        --mock-success) mock_outcome=success; shift ;;
+        --mock-success) auth_scenario=password-success; auth_scenario_explicit=1; shift ;;
         --metrics) metrics=1; shift ;;
         --no-session-bus) without_bus=1; shift ;;
         *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
@@ -53,11 +57,23 @@ case "$fault" in
     *) printf 'Unknown fault fixture: %s\n' "$fault" >&2; exit 2 ;;
 esac
 case "$scenario" in
-    none|idle|auth|auth-hold|failure|success) ;;
+    none|idle|auth|auth-hold|failure|retry|success|cancel-during-prompt|late-response-after-cancel) ;;
     *) printf 'Unknown state capture scenario: %s\n' "$scenario" >&2; exit 2 ;;
 esac
-if [[ "$scenario" == success ]]; then
-    mock_outcome=success
+case "$auth_backend" in
+    mock|greetd-fixture) ;;
+    *) printf 'Unknown authentication backend: %s\n' "$auth_backend" >&2; exit 2 ;;
+esac
+case "$auth_scenario" in
+    password-success|password-failure|multi-prompt|visible-prompt|informational-message|error-message|cancel-during-prompt|late-response-after-cancel) ;;
+    *) printf 'Unknown authentication scenario: %s\n' "$auth_scenario" >&2; exit 2 ;;
+esac
+if ((auth_scenario_explicit == 0)); then
+    if [[ "$scenario" == success ]]; then
+        auth_scenario=password-success
+    elif [[ "$scenario" == failure ]]; then
+        auth_scenario=password-failure
+    fi
 fi
 if [[ "$scenario" != none && "$duration" == 0 ]]; then
     duration=12
@@ -69,6 +85,10 @@ for program in kwin_wayland quickshell setsid rg; do
         exit 127
     fi
 done
+if [[ "$auth_backend" == greetd-fixture ]] && ! command -v python3 >/dev/null 2>&1; then
+    printf 'python3 is required for the local greetd protocol fixture.\n' >&2
+    exit 127
+fi
 if ((without_bus == 0)) && ! command -v dbus-daemon >/dev/null 2>&1; then
     printf 'dbus-daemon is required for an isolated session bus.\n' >&2
     exit 127
@@ -97,6 +117,7 @@ log_dir="$(mktemp -d "$log_parent/run.XXXXXX")"
 kwin_pid=''
 quickshell_pid=''
 bus_pid=''
+greetd_fixture_pid=''
 
 stop_group() {
     local group_pid="$1"
@@ -111,9 +132,37 @@ check_runtime_warnings() {
         return 1
     fi
 }
+check_fixture_launch_blocked() {
+    if [[ "$auth_backend" != greetd-fixture ]]; then
+        return 0
+    fi
+    stop_group "$greetd_fixture_pid"
+    greetd_fixture_pid=''
+    if [[ ! -f "$greetd_fixture_status" ]]; then
+        printf 'Protocol fixture status is missing; inspect %s/greetd-fixture.log\n' "$log_dir" >&2
+        return 1
+    fi
+    if rg -q --fixed-strings '123456' "$log_dir/quickshell.log"; then
+        printf 'An authentication response canary appeared in %s/quickshell.log\n' "$log_dir" >&2
+        return 1
+    fi
+    python3 - "$greetd_fixture_status" "$scenario" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as status_file:
+    status = json.load(status_file)
+if sys.argv[2] == "retry" and status.get("create_session", 0) < 2:
+    raise SystemExit("The Greetd API did not begin the retry attempt.")
+if status.get("start_session", 0) != 0:
+    raise SystemExit("The 0.7 adapter attempted start_session.")
+print("Fixture requests: create_session={create_session}, cancel_session={cancel_session}, start_session={start_session}".format(**status))
+PY
+}
 cleanup() {
     trap - EXIT
     stop_group "$quickshell_pid"
+    stop_group "$greetd_fixture_pid"
     stop_group "$kwin_pid"
     stop_group "$bus_pid"
     if [[ "$runtime_root" == "${TMPDIR:-/tmp}"/nocturne-isolated.* && -d "$runtime_root" ]]; then
@@ -144,6 +193,30 @@ if ((without_bus == 0)); then
     done
     if [[ ! -S "$private_bus_socket" ]]; then
         printf 'Private session bus did not create its socket; inspect %s/dbus.log\n' "$log_dir" >&2
+        exit 1
+    fi
+fi
+
+if [[ "$auth_backend" == greetd-fixture ]]; then
+    greetd_fixture_socket="$runtime_root/runtime/greetd.sock"
+    greetd_fixture_status="$runtime_root/runtime/greetd-fixture-status.json"
+    setsid env -i PATH=/usr/bin:/bin \
+        python3 "$project_root/harness/protocol/greetd-fixture.py" \
+        --socket "$greetd_fixture_socket" --status-file "$greetd_fixture_status" \
+        --scenario "$auth_scenario" \
+        >"$log_dir/greetd-fixture.log" 2>&1 &
+    greetd_fixture_pid=$!
+    for ((attempt = 0; attempt < 50; attempt++)); do
+        if [[ -S "$greetd_fixture_socket" ]]; then
+            break
+        fi
+        if ! kill -0 "$greetd_fixture_pid" 2>/dev/null; then
+            break
+        fi
+        sleep 0.1
+    done
+    if [[ ! -S "$greetd_fixture_socket" ]]; then
+        printf 'Local greetd protocol fixture did not create its socket; inspect %s/greetd-fixture.log\n' "$log_dir" >&2
         exit 1
     fi
 fi
@@ -192,8 +265,12 @@ nested_socket_name=wayland-umbra
 nested_socket="$runtime_root/runtime/$nested_socket_name"
 printf 'Host socket: %s\nNested socket: %s\n' "$host_socket" "$nested_socket"
 printf 'Isolated runtime: %s\nLogs: %s\n' "$runtime_root" "$log_dir"
-printf 'Mock result: %s; fault fixture: %s; state capture: %s; session bus passed: %s\n' "$mock_outcome" "$fault" "$scenario" "$((1 - without_bus))"
-printf 'This harness never calls PAM, greetd, PLM, or a real session launcher.\n'
+printf 'Authentication backend: %s; scenario: %s; fault fixture: %s; state capture: %s; session bus passed: %s\n' "$auth_backend" "$auth_scenario" "$fault" "$scenario" "$((1 - without_bus))"
+if [[ "$auth_backend" == greetd-fixture ]]; then
+    printf 'GREETD_SOCK points to a local protocol fixture. It does not run greetd, PAM, or a session command.\n'
+else
+    printf 'This harness never calls PAM, greetd, PLM, or a real session launcher.\n'
+fi
 
 start_ms="$(date +%s%3N)"
 setsid env -i "${base_env[@]}" kwin_wayland \
@@ -224,11 +301,18 @@ quickshell_command=quickshell
 if [[ "$fault" == quickshell ]]; then
     quickshell_command="$runtime_root/no-such-quickshell"
 fi
-setsid env -i "${base_env[@]}" "WAYLAND_DISPLAY=$nested_socket_name" \
-    "NOCTURNE_MOCK_OUTCOME=$mock_outcome" \
-    "NOCTURNE_HARNESS_SCENARIO=$scenario" \
-    "NOCTURNE_HARNESS_METRICS=$metrics" \
-    "NOCTURNE_HARNESS_CAPTURE_DIR=$log_dir" "$quickshell_command" \
+auth_env=(
+    "NOCTURNE_AUTH_BACKEND=$auth_backend"
+    "NOCTURNE_AUTH_SCENARIO=$auth_scenario"
+    "NOCTURNE_HARNESS_SCENARIO=$scenario"
+    "NOCTURNE_HARNESS_METRICS=$metrics"
+    "NOCTURNE_HARNESS_CAPTURE_DIR=$log_dir"
+)
+if [[ "$auth_backend" == greetd-fixture ]]; then
+    auth_env+=("GREETD_SOCK=$greetd_fixture_socket")
+fi
+setsid env -i "${base_env[@]}" "WAYLAND_DISPLAY=$nested_socket_name" "${auth_env[@]}" \
+    "$quickshell_command" \
     --no-color --path "$runtime_root/stage" \
     >"$log_dir/quickshell.log" 2>&1 &
 quickshell_pid=$!
@@ -277,6 +361,7 @@ fi
 if wait "$quickshell_pid"; then
     printf 'Quickshell exited normally.\n'
     check_runtime_warnings
+    check_fixture_launch_blocked
 else
     printf 'Quickshell exited with an error; inspect %s/quickshell.log\n' "$log_dir" >&2
     exit 1

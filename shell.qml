@@ -20,6 +20,9 @@ ShellRoot {
         debugMode: Quickshell.env("NOCTURNE_DEBUG") === "1"
         username: Quickshell.env("NOCTURNE_USER_NAME") || Quickshell.env("USER") || "user"
         hostname: Quickshell.env("HOSTNAME") || Quickshell.env("HOST") || "Local system"
+        promptText: boundary.promptText
+        responseRequired: boundary.responseRequired
+        echoResponse: boundary.echoResponse
         sessionContextText: "Current session · preview"
         powerUnavailableText: "Unavailable in preview"
         windowTitle: "Nocturne Greeter · Preview"
@@ -28,7 +31,16 @@ ShellRoot {
     }
 
     PreviewAuthenticator {
+        id: previewBackend
         controller: preview.controller
+    }
+
+    AuthenticatorBridge {
+        id: boundary
+        controller: preview.controller
+        backend: previewBackend
+        selectedUser: preview.loginUser
+        selectedSession: "preview-session"
     }
 
     Loader {

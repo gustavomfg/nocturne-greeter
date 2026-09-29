@@ -7,6 +7,8 @@ Item {
     property string username: "user"
     property string loginUser: username
     property string promptText: "Enter your password"
+    property bool responseRequired: true
+    property bool echoResponse: false
     property real scaleFactor: 1
     property bool debugMode: false
     property bool previewShortcutsEnabled: false
@@ -17,7 +19,7 @@ Item {
     readonly property real failureCopyHandoff: .7
     readonly property bool preparingAuthentication: controller.phase === GreeterController.Authenticating || controller.phase === GreeterController.Success
     readonly property int passwordDotCapacity: Math.max(0, Math.floor((passphraseArea.width - submitButton.width - 18 * root.scaleFactor) / (16 * root.scaleFactor)))
-    readonly property int visiblePasswordDots: Math.min(passwordInput.length, passwordDotCapacity)
+    readonly property int visiblePasswordDots: echoResponse ? 0 : Math.min(passwordInput.length, passwordDotCapacity)
     function focusInput() {
         passwordInput.forceActiveFocus();
     }
@@ -34,14 +36,15 @@ Item {
         controller.noteKey();
     }
     function submit(previewSuccess) {
-        if (!controller.acceptsKeyboardInput)
+        if (!controller.acceptsKeyboardInput || !responseRequired)
             return;
-        const submittedSecret = passwordInput.text;
+        let submittedResponse = passwordInput.text;
         if (previewSuccess && previewShortcutsEnabled)
-            controller.requestPreviewSuccess(username, submittedSecret);
+            controller.requestPreviewSuccess(loginUser, submittedResponse);
         else
-            controller.requestAuthentication(loginUser, submittedSecret);
+            controller.requestAuthentication(loginUser, submittedResponse);
         passwordInput.clear();
+        submittedResponse = "";
     }
     Column {
         y: (1 - root.identityReveal) * 12
@@ -104,20 +107,23 @@ Item {
                 color: "#92929E"
                 font.family: "Adwaita Sans"
                 font.pixelSize: 15 * root.scaleFactor
+                textFormat: Text.PlainText
             }
             TextInput {
                 id: passwordInput
                 anchors.fill: parent
                 enabled: root.controller.acceptsKeyboardInput
                 activeFocusOnPress: true
-                echoMode: TextInput.Password
+                echoMode: root.echoResponse ? TextInput.Normal : TextInput.Password
                 maximumLength: 256
-                color: "transparent"
-                selectionColor: "transparent"
-                selectedTextColor: "transparent"
-                cursorVisible: false
-                inputMethodHints: Qt.ImhHiddenText | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
-                Accessible.name: "Password"
+                color: root.echoResponse ? "#F2F2F3" : "transparent"
+                selectionColor: root.echoResponse ? "#5F4C88" : "transparent"
+                selectedTextColor: root.echoResponse ? "#FFFFFF" : "transparent"
+                cursorVisible: root.echoResponse && activeFocus
+                inputMethodHints: root.echoResponse
+                                  ? Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+                                  : Qt.ImhHiddenText | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+                Accessible.name: root.echoResponse ? "Visible authentication response" : "Hidden authentication response"
                 Keys.onPressed: event => {
                     if (event.key === Qt.Key_Escape) {
                         root.controller.returnToIdle();
@@ -171,9 +177,22 @@ Item {
         y: 196 * root.scaleFactor + (1 - root.hintReveal) * 8
         width: parent.width
         wrapMode: Text.WordWrap
+        visible: !root.controller.statusMessageVisible
         opacity: root.hintReveal * (root.controller.phase === GreeterController.Failure ? Math.max(0, 1 - root.controller.failureProgress / root.failureCopyHandoff) : root.preparingAuthentication ? Math.abs(1 - 2 * root.controller.authenticationTension) : 1 - root.controller.authenticationTension)
         text: root.controller.phase === GreeterController.Failure && !root.controller.failureResolving ? "Preparing your space" : root.preparingAuthentication && root.controller.authenticationTension >= .5 ? "Preparing your space" : "Enter to unlock  ·  Esc to return"
         color: "#777781"
+        font.family: "Adwaita Sans"
+        font.pixelSize: 12 * root.scaleFactor
+    }
+    Text {
+        y: 196 * root.scaleFactor + (1 - root.hintReveal) * 8
+        width: parent.width
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+        visible: root.controller.statusMessageVisible && root.controller.phase !== GreeterController.Failure
+        opacity: root.hintReveal * (1 - root.controller.authenticationTension)
+        text: root.controller.statusMessage
+        color: root.controller.statusMessageIsError ? "#A78BFA" : "#92929E"
         font.family: "Adwaita Sans"
         font.pixelSize: 12 * root.scaleFactor
     }

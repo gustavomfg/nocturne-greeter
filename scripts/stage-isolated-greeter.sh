@@ -26,6 +26,7 @@ common_components=(
     AuthenticatorBridge.qml
     ClockDisplay.qml
     CosmicScene.qml
+    GreetdAuthenticator.qml
     GreeterController.qml
     GreeterWindow.qml
     IconButton.qml

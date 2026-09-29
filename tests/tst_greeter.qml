@@ -16,7 +16,16 @@ TestCase {
     }
 
     PreviewAuthenticator {
+        id: previewBackend
         controller: controller
+    }
+
+    AuthenticatorBridge {
+        id: boundary
+        controller: controller
+        backend: previewBackend
+        selectedUser: "preview-user"
+        selectedSession: "preview-session"
     }
 
     AuthPanel {
@@ -28,12 +37,15 @@ TestCase {
         controller: controller
         username: "preview-user"
         previewShortcutsEnabled: true
+        promptText: boundary.promptText
+        responseRequired: boundary.responseRequired
+        echoResponse: boundary.echoResponse
     }
 
     SignalSpy {
-        id: authenticationSpy
+        id: authenticationResponseSpy
         target: controller
-        signalName: "authenticationRequested"
+        signalName: "authenticationResponseSubmitted"
     }
 
     Connections {
@@ -61,7 +73,7 @@ TestCase {
         // than an absolute sleep. Start each test only after reset is complete.
         tryCompare(controller, "phase", GreeterController.Idle, 1200);
         authPanel.inputField.clear();
-        authenticationSpy.clear();
+        authenticationResponseSpy.clear();
     }
 
     function test_initialIdle() {
@@ -108,7 +120,7 @@ TestCase {
         keyClick(Qt.Key_Return);
         compare(controller.phase, GreeterController.Authenticating);
         compare(authPanel.inputField.text, "");
-        compare(authenticationSpy.count, 1);
+        compare(authenticationResponseSpy.count, 1);
 
         tryCompare(controller, "phase", GreeterController.Failure, 1200);
         wait(20);
@@ -181,7 +193,7 @@ TestCase {
         verify(button !== null);
         mouseClick(button, button.width / 2, button.height / 2);
         compare(controller.phase, GreeterController.Authenticating);
-        compare(authenticationSpy.count, 1);
+        compare(authenticationResponseSpy.count, 1);
     }
 
     function test_cancelPendingAndRepeat() {
@@ -189,7 +201,7 @@ TestCase {
         wait(200);
         controller.requestAuthentication("preview-user", "test");
         controller.requestAuthentication("preview-user", "test");
-        compare(authenticationSpy.count, 1);
+        compare(authenticationResponseSpy.count, 1);
         controller.returnToIdle();
         wait(500);
         controller.wake();
@@ -246,7 +258,7 @@ TestCase {
         controller.wake();
         controller.requestAuthentication("preview-user", "pending");
         compare(controller.phase, GreeterController.Authenticating);
-        compare(authenticationSpy.count, 1);
+        compare(authenticationResponseSpy.count, 1);
 
         controller.returnToIdle();
         wait(1000);
@@ -271,6 +283,8 @@ TestCase {
         wait(480);
         controller.requestAuthentication("preview-user", "wrong");
         tryCompare(controller, "phase", GreeterController.Failure, 1200);
+        tryCompare(controller, "phase", GreeterController.Auth, 1200);
+        verify(boundary.responseRequired);
         controller.requestPreviewSuccess("preview-user", "correct");
         compare(controller.phase, GreeterController.Authenticating);
         verify(controller.authenticationTensionActive);
@@ -295,12 +309,13 @@ TestCase {
         compare(authPanel.inputField.text, "b");
         keyClick(Qt.Key_Backspace);
         compare(authPanel.inputField.text, "");
+        tryCompare(controller, "phase", GreeterController.Auth, 1200);
+        verify(boundary.responseRequired);
         keyClick(Qt.Key_C);
         keyClick(Qt.Key_Return);
         compare(controller.phase, GreeterController.Authenticating);
         compare(authPanel.inputField.text, "");
-        compare(authenticationSpy.count, 2);
-        compare(authenticationSpy.signalArguments[1][1], "c");
+        compare(authenticationResponseSpy.count, 2);
 
         tryCompare(controller, "phase", GreeterController.Failure, 1200);
         tryCompare(controller, "phase", GreeterController.Auth, 1200);
@@ -323,7 +338,7 @@ TestCase {
             compare(controller.failureProgress, 0);
             verify(!controller.failureResolving);
         }
-        compare(authenticationSpy.count, 5);
+        compare(authenticationResponseSpy.count, 5);
     }
 
     function test_escapeCancelsFailureRecovery() {
@@ -371,9 +386,7 @@ TestCase {
         authPanel.submit();
         authPanel.submit();
         compare(controller.phase, GreeterController.Authenticating);
-        compare(authenticationSpy.count, 1);
-        compare(authenticationSpy.signalArguments[0][0], "preview-user");
-        compare(authenticationSpy.signalArguments[0][1], "");
+        compare(authenticationResponseSpy.count, 1);
         compare(authPanel.inputField.text, "");
         tryCompare(controller, "phase", GreeterController.Failure, 1200);
         tryCompare(controller, "phase", GreeterController.Auth, 1200);

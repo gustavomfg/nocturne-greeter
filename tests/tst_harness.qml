@@ -21,6 +21,7 @@ TestCase {
 
     MockAuthenticator {
         id: backend
+        scenario: "password-failure"
         responseDelay: 60
     }
 
@@ -40,6 +41,8 @@ TestCase {
         username: fixture.displayName
         loginUser: fixture.userId
         promptText: boundary.promptText
+        responseRequired: boundary.responseRequired
+        echoResponse: boundary.echoResponse
         previewShortcutsEnabled: false
     }
 
@@ -51,9 +54,9 @@ TestCase {
     }
 
     SignalSpy {
-        id: authSpy
+        id: authResponseSpy
         target: controller
-        signalName: "authenticationRequested"
+        signalName: "authenticationResponseSubmitted"
     }
 
     SignalSpy {
@@ -79,13 +82,12 @@ TestCase {
     }
 
     function cleanup() {
-        backend.cancel();
-        backend.outcome = "failure";
+        backend.scenario = "password-failure";
         if (!controller.isIdle)
             controller.returnToIdle();
         wait(500);
         authPanel.clearInput();
-        authSpy.clear();
+        authResponseSpy.clear();
         previewSuccessSpy.clear();
     }
 
@@ -105,18 +107,139 @@ TestCase {
         compare(boundary.promptText, "Enter your password");
         authPanel.inputField.text = "wrong";
         authPanel.submit();
-        compare(authSpy.count, 1);
-        compare(authSpy.signalArguments[0][0], fixture.userId);
+        compare(authResponseSpy.count, 1);
         compare(controller.phase, GreeterController.Authenticating);
         compare(authPanel.inputField.text, "");
         wait(90);
         compare(controller.phase, GreeterController.Failure);
         wait(430);
         compare(controller.phase, GreeterController.Auth);
+        verify(backend.active);
+        verify(boundary.responseRequired);
+    }
+
+    function test_multipleChallengesSwitchFromSecretToVisible() {
+        backend.scenario = "multi-prompt";
+        controller.wake();
+        compare(boundary.promptText, "Enter your password");
+        compare(boundary.echoResponse, false);
+        compare(authPanel.inputField.echoMode, TextInput.Password);
+
+        authPanel.inputField.text = "dummy-password";
+        authPanel.submit();
+        tryCompare(boundary, "promptText", "Enter OTP", 500);
+        verify(boundary.responseRequired);
+        compare(boundary.echoResponse, true);
+        compare(authPanel.inputField.echoMode, TextInput.Normal);
+        compare(authPanel.visiblePasswordDots, 0);
+
+        authPanel.inputField.text = "123456";
+        authPanel.submit();
+        wait(90);
+        compare(controller.phase, GreeterController.Success);
+        compare(authPanel.inputField.text, "");
+        compare(authResponseSpy.count, 2);
+    }
+
+    function test_failureAfterVisibleChallengeClearsEchoModeForRetry() {
+        backend.scenario = "multi-prompt-failure";
+        controller.wake();
+        authPanel.inputField.text = "dummy-password";
+        authPanel.submit();
+        tryCompare(boundary, "promptText", "Enter OTP", 500);
+        verify(boundary.echoResponse);
+
+        authPanel.inputField.text = "123456";
+        authPanel.submit();
+        tryCompare(controller, "phase", GreeterController.Failure, 500);
+        verify(!boundary.echoResponse);
+        compare(authPanel.inputField.echoMode, TextInput.Password);
+        tryCompare(controller, "phase", GreeterController.Auth, 800);
+        verify(boundary.responseRequired);
+        verify(!boundary.echoResponse);
+    }
+
+    function test_visiblePromptAndEmptyResponse() {
+        backend.scenario = "visible-prompt";
+        controller.wake();
+        compare(boundary.promptText, "Enter one-time code");
+        verify(boundary.responseRequired);
+        verify(boundary.echoResponse);
+        compare(authPanel.inputField.echoMode, TextInput.Normal);
+
+        authPanel.inputField.text = "";
+        authPanel.submit();
+        compare(authResponseSpy.count, 1);
+        wait(90);
+        compare(controller.phase, GreeterController.Success);
+    }
+
+    function test_informationalAndRecoverableErrorMessages() {
+        backend.scenario = "informational-message";
+        controller.wake();
+        compare(controller.statusMessage, "Touch your security key");
+        verify(controller.statusMessageVisible);
+        verify(!controller.statusMessageIsError);
+
+        controller.returnToIdle();
+        tryCompare(controller, "phase", GreeterController.Idle, 700);
+        backend.scenario = "error-message";
+        controller.wake();
+        compare(controller.statusMessage, "Security key not detected");
+        verify(controller.statusMessageVisible);
+        verify(controller.statusMessageIsError);
+        verify(boundary.responseRequired);
+    }
+
+    function test_lateCallbackAfterCancelCannotAffectNewAttempt() {
+        backend.scenario = "late-response-after-cancel";
+        controller.wake();
+        authPanel.inputField.text = "dummy";
+        authPanel.submit();
+        const cancelledGeneration = boundary.generation;
+        controller.returnToIdle();
+        tryCompare(controller, "phase", GreeterController.Idle, 700);
+
+        controller.wake();
+        verify(boundary.generation > cancelledGeneration);
+        const newGeneration = boundary.generation;
+        wait(280);
+        compare(boundary.generation, newGeneration);
+        verify(controller.phase === GreeterController.Wake || controller.phase === GreeterController.Auth);
+        tryCompare(controller, "phase", GreeterController.Auth, 700);
+        verify(boundary.responseRequired);
+        verify(backend.active);
+    }
+
+    function test_duplicateFailureCallbackDoesNotCorruptRetry() {
+        backend.scenario = "password-failure";
+        controller.wake();
+        authPanel.inputField.text = "dummy";
+        authPanel.submit();
+        const failedGeneration = boundary.generation;
+        tryCompare(controller, "phase", GreeterController.Failure, 500);
+
+        backend.failure("DUPLICATE FAILURE", failedGeneration);
+        compare(controller.phase, GreeterController.Failure);
+        tryCompare(controller, "phase", GreeterController.Auth, 800);
+        verify(boundary.generation > failedGeneration);
+        verify(boundary.responseRequired);
+        verify(backend.active);
+    }
+
+    function test_backendDisappearingFailsClosed() {
+        controller.wake();
+        backend.disconnectBackend();
+        compare(controller.phase, GreeterController.Failure);
+        compare(boundary.attemptActive, false);
+        verify(controller.statusMessageIsError);
+        wait(430);
+        compare(controller.phase, GreeterController.Auth);
+        verify(!boundary.responseRequired);
     }
 
     function test_mockReadyToLaunchUsesExistingSuccessMotion() {
-        backend.outcome = "success";
+        backend.scenario = "password-success";
         controller.wake();
         authPanel.inputField.text = "dummy";
         authPanel.submit();
@@ -126,6 +249,8 @@ TestCase {
         compare(authPanel.inputField.text, "");
         wait(1450);
         verify(controller.successProgress > .99);
+        compare(backend.requestSessionLaunch(), false);
+        compare(boundary.requestSessionLaunch(), false);
     }
 
     function test_cancelPreventsLateResult() {
@@ -147,7 +272,7 @@ TestCase {
         keyClick(Qt.Key_A);
         keyClick(Qt.Key_Return, Qt.ControlModifier);
         compare(previewSuccessSpy.count, 0);
-        compare(authSpy.count, 1);
+        compare(authResponseSpy.count, 1);
         compare(controller.phase, GreeterController.Authenticating);
     }
 

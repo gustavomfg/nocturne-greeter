@@ -24,6 +24,10 @@ Item {
     property real successProgress: 0
     property real authenticationTension: 0
     property string statusMessage: ""
+    property bool statusMessageVisible: false
+    property bool statusMessageIsError: false
+    property bool responseRequired: false
+    property bool echoResponse: false
 
     readonly property bool isIdle: phase === GreeterController.Idle
     readonly property bool authenticationTensionActive: phase === GreeterController.Authenticating || phase === GreeterController.Success
@@ -32,13 +36,18 @@ Item {
 
     signal focusInputRequested
     signal clearInputRequested
-    signal authenticationRequested(string username, string secret)
+    signal authenticationRequested(string username, string response)
+    signal authenticationResponseSubmitted
     signal previewSuccessRequested
 
     function wake() {
         if (!isIdle)
             return;
         statusMessage = "";
+        statusMessageVisible = false;
+        statusMessageIsError = false;
+        responseRequired = false;
+        echoResponse = false;
         authReveal = 0;
         wakeTension = 0;
         failureProgress = 0;
@@ -56,34 +65,80 @@ Item {
         typingAnimation.restart();
     }
 
-    function requestAuthentication(username, secret) {
+    function requestAuthentication(username, response) {
         if (phase !== GreeterController.Wake && phase !== GreeterController.Auth && phase !== GreeterController.Failure) {
             return;
         }
+        if (!responseRequired)
+            return;
 
         failureTimeline.stop();
         failureProgress = 0;
         failureResolving = false;
         statusMessage = "Authentication pending";
+        statusMessageVisible = false;
+        statusMessageIsError = false;
+        responseRequired = false;
+        echoResponse = false;
         phase = GreeterController.Authenticating;
-        authenticationRequested(username, secret);
+        clearInputRequested();
+        authenticationRequested(username, response);
+        authenticationResponseSubmitted();
+        response = "";
+    }
+
+    function presentPrompt(message, required, responseEchoed) {
+        responseRequired = required;
+        echoResponse = responseEchoed;
+        if (!required)
+            return;
+
+        if (statusMessage === "Authentication pending") {
+            statusMessage = "";
+            statusMessageVisible = false;
+        }
+
+        if (phase === GreeterController.Authenticating) {
+            phase = GreeterController.Auth;
+            focusInputRequested();
+        } else if (phase === GreeterController.Failure) {
+            failureTimeline.stop();
+            failureProgress = 0;
+            failureResolving = false;
+            phase = GreeterController.Auth;
+            focusInputRequested();
+        }
+        void message;
+    }
+
+    function presentMessage(message, isError) {
+        statusMessage = message;
+        statusMessageVisible = message.length > 0;
+        statusMessageIsError = isError;
     }
 
     function rejectAuthentication(message) {
-        if (phase !== GreeterController.Authenticating)
+        if (phase !== GreeterController.Wake && phase !== GreeterController.Auth && phase !== GreeterController.Authenticating)
             return;
         statusMessage = message;
+        statusMessageVisible = false;
+        statusMessageIsError = true;
+        responseRequired = false;
+        echoResponse = false;
         failureProgress = 0;
         failureResolving = false;
         phase = GreeterController.Failure;
         failureTimeline.restart();
     }
 
-    function requestPreviewSuccess(username, secret) {
+    function requestPreviewSuccess(username, response) {
         if (phase !== GreeterController.Wake && phase !== GreeterController.Auth && phase !== GreeterController.Failure)
             return;
+        if (!responseRequired)
+            return;
 
-        requestAuthentication(username, secret);
+        requestAuthentication(username, response);
+        response = "";
         if (phase !== GreeterController.Authenticating)
             return;
 
@@ -93,11 +148,15 @@ Item {
     }
 
     function completeAuthentication() {
-        if (phase !== GreeterController.Authenticating)
+        if (phase !== GreeterController.Wake && phase !== GreeterController.Auth && phase !== GreeterController.Authenticating)
             return;
 
         failureTimeline.stop();
         statusMessage = "";
+        statusMessageVisible = false;
+        statusMessageIsError = false;
+        responseRequired = false;
+        echoResponse = false;
         failureProgress = 0;
         phase = GreeterController.Success;
         clearInputRequested();
@@ -117,6 +176,10 @@ Item {
         failureTimeline.stop();
         successTimeline.stop();
         statusMessage = "";
+        statusMessageVisible = false;
+        statusMessageIsError = false;
+        responseRequired = false;
+        echoResponse = false;
         failureResolving = false;
         typingAnimation.stop();
         typingPulse = 0;
@@ -222,6 +285,8 @@ Item {
                 if (root.phase === GreeterController.Failure) {
                     root.phase = GreeterController.Auth;
                     root.statusMessage = "";
+                    root.statusMessageVisible = false;
+                    root.statusMessageIsError = false;
                 }
                 root.failureResolving = false;
             }

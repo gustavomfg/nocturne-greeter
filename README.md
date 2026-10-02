@@ -84,6 +84,7 @@ O último comando executa o módulo Greetd instalado contra um socket fixture lo
 ~/.config/nocturne-greeter/scripts/test-greeter.sh
 ~/.config/nocturne-greeter/scripts/lint-qml.sh
 ~/.config/nocturne-greeter/scripts/test-greetd-protocol.sh
+~/.config/nocturne-greeter/scripts/test-real-login-vm-guard.sh
 ```
 
 Os testes Qt Quick offscreen verificam estados, teclado, clique/foco e submissão. Não substituem avaliação visual.
@@ -115,3 +116,7 @@ O primeiro histórico público descreve o estado atual Umbra 0.6 em commits tem�
 ## Fronteira de autenticação 0.7
 
 `AuthenticatorBridge` normaliza mock e `GreetdAuthenticator`, incluindo prompt secreto/visível, mensagens, cancelamento e geração por tentativa. A API real do Quickshell foi exercitada apenas contra um fixture IPC local. `readyToLaunch` termina na animação SUCCESS e na tela preta; `Greetd.launch()` e sessão real permanecem bloqueados. Não há autenticação PAM real. Veja [o relatório 0.7](docs/GREETD_PROTOCOL_0.7.md) para API, limites e o que falta provar em VM.
+
+## Real login 0.8 — preparação
+
+O plano, a detecção fail-closed de VM e os limites ainda não provados estão em [REAL_LOGIN_VM_0.8.md](docs/REAL_LOGIN_VM_0.8.md). O estado é **PREPARATION ONLY**: greetd real, PAM, sessão e boot não foram testados.

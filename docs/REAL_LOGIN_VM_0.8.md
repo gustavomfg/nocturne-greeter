@@ -2,7 +2,7 @@
 
 **STATUS: PREPARATION ONLY**
 
-**Last checked:** 2026-10-01
+**Last checked:** 2026-10-02
 
 **Scope:** prepare a disposable VM experiment. No real greetd/PAM login was run.
 
@@ -21,12 +21,15 @@
 - `qmllint`, `bash -n`, QSB rebuild, GLSL validation, staging and staged
   SHA-256 verification passed. The nested harness started and cleaned up its
   compositor, client, fixture and temporary runtime.
+- All eleven VM-guard unit tests passed with synthetic evidence. Read-only
+  `--check` and `--bootstrap --dry-run` both aborted on this physical host
+  before creating the VM marker.
 - The repository scan found no credential-shaped token, password assignment,
   host home path, machine-id/runtime file, or protocol canary in the logs.
 
 ### PREPARED
 
-- A fail-closed VM guard and nine fixture-based guard tests were added.
+- A fail-closed VM guard and eleven fixture-based guard tests are present.
 - The VM, recovery, compositor and session-launch plan below is ready for a
   guest with a console and snapshot support.
 - The launch lifecycle is specified, while the 0.7 launch barrier remains
@@ -134,7 +137,7 @@ output, then explicitly test its multi-output behavior.
 
 | Candidate | Use in this phase |
 | --- | --- |
-| Cage | Recommended first VM test. Small single-app surface; DRM/seat, Quickshell, keyboard layout, fullscreen and recovery still require direct proof. |
+| Cage | First candidate to evaluate, not a final decision. It is a small single-app compositor; its current upstream release supports `wp_presentation`, which is useful for the black-frame gate. DRM/seat, Quickshell, keyboard layout, fullscreen and recovery still require direct proof. |
 | KWin | Strong Qt compatibility and already used by the host's existing greeter, but large and dependency-heavy. Keep it as a diagnostic fallback if Cage exposes a Qt Wayland issue. KWin nested remains only a harness. |
 | Weston | Stable reference compositor with useful diagnostics; more general configuration than needed for the first kiosk proof. Useful fallback if seat/backend diagnosis is needed. |
 | Hyprland | Do not start with it. It adds session/configuration complexity and makes it harder to isolate the greeter lifecycle. Test a minimal Hyprland/UWSM session only after the small Wayland session loops correctly. |
@@ -212,6 +215,33 @@ Keep checkpoints separate so a failure has a known recovery point.
     after the minimal Cage session and three logout cycles pass. Do not copy a
     host dotfile or enable host services.
 
+### VM test matrix
+
+Run these rows only after the baseline snapshot exists and graphical plus
+serial/TTY recovery has been proven without greetd. Keep the recovery console
+open during every row. Record the guest snapshot name, package versions,
+observed result, logs reviewed and recovery method. Never record a password or
+the canary value.
+
+| Case | Execution | Pass condition / evidence |
+| --- | --- | --- |
+| Empty, incorrect and repeated incorrect passwords | First against packaged `agreety`, then through Umbra with distribution PAM unchanged. Do not put values on a command line. | Empty input does not authenticate; each bad password returns a usable prompt; repeated failures do not lock the VM into a loop. Record any distribution lockout policy before testing. |
+| Correct password | Authenticate the disposable guest account in `agreety`, then Umbra. | PAM accepts it. Umbra reaches `readyToLaunch`, finishes SUCCESS, and remains black until the presentation gate opens. Record this as real only in the guest. |
+| Multiple PAM challenges | Exercise only if the packaged PAM stack actually returns more than one challenge. | Each challenge maps to the correct visible/secret prompt, and no response is reused. Do not change PAM just to manufacture this case. The existing fixture covers multi-prompt behavior deterministically. |
+| Cancel during prompt | Cancel with Escape while a challenge is pending. Check the current process behavior, then restart the greeter from the recovery console before trying another authentication. | The cancelled attempt cannot reach SUCCESS or launch. The current 0.7 real Greetd singleton intentionally refuses reuse after cancel; same-process retry is not a pass condition until a safe lifecycle is implemented and proven. |
+| Late callback after cancel | Use the delayed protocol fixture and QML tests, not a real password. | Existing automated tests prove that stale fixture callbacks cannot change the active generation. Mark this row **simulated**; a real PAM daemon does not provide a deterministic way to manufacture a delayed callback. |
+| Greeter crash | Kill Quickshell from the guest recovery console during idle and during an active prompt. | Record whether Cage exits, what greetd restarts, whether a loop occurs, and whether the recovery console remains usable. No secret may appear in logs. |
+| Compositor crash | Terminate Cage from the guest recovery console. | Record greetd's restart behavior, seat/VT recovery, loop behavior and exact log explanation. Restore the checkpoint if the greeter does not return cleanly. |
+| greetd restart | Restart the guest greetd unit from the independent recovery console. | The old greeter is gone, a fresh greeter can start, and PAM can be retried. Confirm service/socket ownership and no orphaned Cage or Quickshell process. |
+| Session exits immediately | After the black-frame gate and launch proof are implemented, use a fixed allowlisted test session whose process exits immediately. | greetd returns to a fresh greeter, no old session processes remain, and the console stays recoverable. Do not use a shell string derived from UI or user input. |
+| Normal logout and three cycles | Complete login → Wayland session → logout → Umbra three times, checking the process tree after each cycle. | Every logout returns to a responsive Umbra. No stale greeter compositor, Quickshell or session process remains between cycles. |
+| Reboot | Only after the manual session loop passes, reboot the guest twice from its normal boot path. | Each boot reaches greetd/Umbra; one complete login/logout works after each reboot; recovery TTY and snapshot remain available. |
+
+For every failure case also record: recovery TTY available; greetd state;
+compositor state; restart/loop behavior; whether the last good snapshot was
+needed; and which log line explains the failure. A missing result is pending,
+not a pass.
+
 ### SUCCESS / black / launch contract
 
 The real launch path must remain separate from 0.7 and be introduced only in
@@ -225,8 +255,9 @@ flowchart TD
     D --> E[PAM authentication through greetd]
     E -->|failure| D
     E -->|success: readyToLaunch| F[SUCCESS animation]
-    F --> G[black scene submitted and frame presented]
-    G --> H[requestSessionLaunch]
+    F --> G[black scene frozen]
+    G --> G2[wp_presentation_feedback presented for that black commit]
+    G2 --> H[requestSessionLaunch]
     H --> I[Greetd.launch with fixed allowlisted argv]
     I --> J[Quickshell exits after launch acknowledgement]
     J --> K[Cage exits when its greeter client is gone]
@@ -235,17 +266,51 @@ flowchart TD
     M --> B
 ```
 
-Do not launch when `successProgress` merely approaches 1. Wait until the
-SUCCESS animation has completed, the background-only black frame has actually
-been submitted/presented, and the launch request still belongs to the active
-authentication generation. Then send one fixed argv/environment allowlist to
+Do not launch when `successProgress` merely approaches 1, and do not use an
+approximate timer as permission to launch. Qt Quick's `Window.frameSwapped()`
+means a frame was queued for presentation; it is not proof that the display
+presented it. The present gate must therefore require both:
+
+1. SUCCESS animation completion for the active authentication generation,
+   followed by an immutable, fully opaque black-only greeter scene (no shader,
+   text, cursor or transparent surface can still expose the previous frame).
+2. A `wp_presentation_feedback.presented` event for a known `wl_surface.commit`
+   produced while that black-only scene is active. `discarded`, missing
+   protocol support, an unknown surface/commit, compositor loss or timeout
+   must keep launch disabled. A timeout may abort the attempt; it must never
+   grant permission to launch.
+
+The current QML frontend has no presentation-feedback bridge. Qt's documented
+Wayland application native interface exposes the app's `wl_display`, but not a
+documented public handle for the particular Quickshell window surface; Qt also
+does not promise source/binary compatibility for native interfaces. Before
+enabling launch, implement and test a small in-process bridge (or an equally
+strong supported mechanism) that associates presentation feedback with the
+exact fullscreen Umbra surface and exact black commit. If the installed Qt /
+Quickshell stack cannot provide that correlation safely, stop with launch
+blocked. `frameSwapped()` alone is insufficient.
+
+Once the `presented` event arrives, verify the black scene is still held,
+`readyToLaunch` and the generation still match, and that no launch has already
+been requested. Then send one fixed argv/environment allowlist to
 `Greetd.launch(..., quit=true)`. Never make a shell command from the username,
-password, session label or `.desktop` contents.
+password, session label or `.desktop` contents. Record only credential-free
+transition markers such as `success-finished`, `black-commit-presented`, and
+`launch-requested`; the observed presentation marker must precede the launch
+marker.
 
 The greetd IPC contract says the requested session starts after the greeter
 process terminates. Verify the observed Quickshell → Cage → greetd process
 ordering and seat release in the VM. Do not assume `quit=true` by itself proves
 the frame was presented or that the seat handoff succeeded.
+
+The installed Quickshell version must be checked before implementation. Its
+Greetd API requires `GreetdState.ReadyToLaunch`; `launch(command, environment,
+quit)` exits Quickshell after greetd acknowledges the launch when `quit` is
+true. The API guidance says to finish animations before calling `launch()` and
+to terminate promptly afterward. Therefore all animation and presentation
+feedback must complete before the API call; do not start an animation after
+calling it or wait for visual confirmation after requesting launch.
 
 ### Cancellation limitation to resolve in the VM
 
@@ -307,7 +372,7 @@ record any objective font/DPI/input defect before changing visuals.
 - The preparation machine's PAM, display-manager unit, boot, TTY, seat and
   login services were not changed. No greetd/PAM authentication or session
   launch was run here.
-- No force push was used. No push of the 0.8 branch is planned.
+- No force push has been used.
 
 ## Primary references
 
@@ -319,4 +384,11 @@ record any objective font/DPI/input defect before changing visuals.
 - [greetd IPC manual](https://raw.githubusercontent.com/kennylevinsen/greetd/master/man/greetd-ipc-7.scd)
 - [Cage project](https://github.com/cage-kiosk/cage) and
   [Cage usage wiki](https://github.com/cage-kiosk/cage/wiki)
+- [Cage release notes](https://github.com/cage-kiosk/cage/releases) for its
+  `presentation-time` protocol support
+- [Qt Quick Window QML reference](https://doc.qt.io/qt-6/qml-qtquick-window.html)
+  for `frameSwapped()` semantics and
+  [Qt Wayland application native interface](https://doc.qt.io/qt-6/qnativeinterface-qwaylandapplication.html)
+- [Wayland presentation-time protocol](https://wayland.app/protocols/presentation-time)
+- [Quickshell.Services.Greetd API](https://quickshell.org/docs/v0.2.1/types/Quickshell.Services.Greetd/Greetd/)
 - [systemd-vmspawn manual](https://www.freedesktop.org/software/systemd/man/latest/systemd-vmspawn.html)

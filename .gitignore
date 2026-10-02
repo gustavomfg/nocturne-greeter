@@ -14,6 +14,8 @@ scripts/restore-*.sh
 *.log
 *.tmp
 *.pid
+__pycache__/
+*.py[cod]
 
 # Editor / OS noise
 .DS_Store
